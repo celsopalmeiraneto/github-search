@@ -8,6 +8,17 @@ test('parse user from github search', () => {
   }])).toEqual(['celsopalmeiraneto']);
 });
 
+test('fails when given an wrong search input', () => {
+  const gh = new GitHub();
+  expect(() => {
+    gh._parseUsersFromSearch({
+      'login': 'celsopalmeiraneto',
+      'id': 1665576,
+    });
+  }).toThrow();
+});
+
+
 test('search users by a username', async () => {
   const resp = ['celsopalmeiraneto'];
 
@@ -71,6 +82,7 @@ test('get user by username', () => {
         }
     );
   });
+  expect.assertions(1);
   return gh.getUserByUsername('celsopalmeiraneto')
       .then((user) => expect(user).toEqual({
         avatarURL: 'https://avatars1.githubusercontent.com/u/1665576?v=4',
@@ -121,25 +133,37 @@ test('get repos of a user', () => {
             }
         );
       });
+  expect.assertions(1);
   return gh.getReposOfUser('celsopalmeiraneto')
       .then((repos) => expect(repos).toEqual(['a', 'b', 'c', 'd']));
 });
 
 test('get languages of a repo', () => {
   const gh = new GitHub();
-  gh.axiosGH.get = jest.fn().mockImplementation(() => {
-    return Promise.resolve(
-        {
-          'PHP': 54528,
-          'HTML': 668,
-          'JavaScript': 643,
-        }
-    );
+  gh.axiosGH.get = jest.fn().mockImplementationOnce(() => {
+    return Promise.resolve({
+      data: {'PHP': 54528, 'HTML': 668, 'JavaScript': 643},
+    });
   });
-  return gh.getReposOfUser('biKamar')
-      .then((user) => expect(user).toEqual({
-        'PHP': 54528,
-        'HTML': 668,
-        'JavaScript': 643,
-      }));
+  expect.assertions(1);
+  return expect(gh.getLanguagesOfRepo('celsopalmeiraneto', 'biKamar'))
+      .resolves.toEqual({'PHP': 54528, 'HTML': 668, 'JavaScript': 643});
+});
+
+test('parse header link', () => {
+  const gh = new GitHub();
+  /* eslint-disable max-len*/
+  const parsed1 = gh._parseHeaderLink(
+      '<https://api.github.com/user/1342004/repos?page=2>; rel="next", <https://api.github.com/user/1342004/repos?page=46>; rel="last"'
+  );
+  expect(parsed1.next).toEqual('https://api.github.com/user/1342004/repos?page=2');
+  expect(parsed1.last).toEqual('https://api.github.com/user/1342004/repos?page=46');
+
+  const parsed2 = gh._parseHeaderLink(
+      '<https://api.github.com/user/1342004/repos?page=45>; rel="prev", <https://api.github.com/user/1342004/repos?page=1>; rel="first"'
+  );
+  expect(parsed2.prev).toEqual('https://api.github.com/user/1342004/repos?page=45');
+  expect(parsed2.first).toEqual('https://api.github.com/user/1342004/repos?page=1');
+  expect(parsed2).not.toHaveProperty('next');
+  /* eslint-enable max-len*/
 });
