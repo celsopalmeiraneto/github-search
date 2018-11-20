@@ -60,6 +60,23 @@ class GitHub {
   }
 
   /**
+  @param {string} username - Username to use in the composite key
+  @param {string} repo - Repo to use in the composite key
+  @return {object} - Languages used in this repo.
+  */
+  async getLanguagesOfRepo(username, repo) {
+    if (typeof username !== 'string') {
+      throw new Error('Username must be a string');
+    }
+    if (typeof repo !== 'string') {
+      throw new Error('Repo must be a string');
+    }
+    const url = `/repos/${username}/${repo}/languages`;
+    const response = await this.axiosGH.get(url);
+    return response.data;
+  }
+
+  /**
   @param {string} username
   @return {array} - Array of repos names.
   */
@@ -91,6 +108,9 @@ class GitHub {
   @return {object} - User containing only the info we want.
   */
   async getUserByUsername(username) {
+    if (typeof username !== 'string') {
+      throw new Error('Username must be a string');
+    }
     const response = await this.axiosGH.get(`/users/${username}`);
     if (response.status === 404) return null;
 
@@ -108,7 +128,7 @@ class GitHub {
   */
   async searchUsersByUsername(username) {
     if (typeof username !== 'string') {
-      throw new Error('Username must be an string');
+      throw new Error('Username must be a string');
     }
     if (username.length === 0) {
       throw new Error('Username cannot be an empty string');
@@ -150,7 +170,44 @@ class GitHub {
   regarding the languages searched.
   */
   async searchUsersByUsernameAndLanguages(username, languages) {
-    const userList = await this.searchUsers(username);
+    const userList = await this.searchUsersByUsername(username);
+    const userProfiles = await Promise.all(userList.map(async (username) => {
+      return await this.getUserByUsername(username);
+    }));
+
+    const usersAndRepos = await Promise.all(userProfiles.map(async (user) => {
+      const reposForUser = await this.getReposOfUser(user.username);
+      user.repos = reposForUser;
+      return user;
+    }));
+
+    const usersAndLangs = await Promise.all(usersAndRepos.map(async (user) => {
+      const reposLangs = await Promise.all(user.repos.map(async (repo) => {
+        return await this.getLanguagesOfRepo(user.username, repo);
+      }));
+      delete user.repos;
+      user.languages = reposLangs.reduce((acc, languageObj) => {
+        const keys = Object.keys(languageObj);
+        keys.forEach((key) => {
+          if (!acc.hasOwnProperty(key)) {
+            acc[key] = languageObj[key];
+          }
+        });
+        return acc;
+      }, {});
+
+      user.languages = Object.keys(user.languages).filter((langToFilter) => {
+        langToFilter = langToFilter.toLowerCase().trim();
+        for (let language of languages) {
+          language = language.toLowerCase().trim();
+          if (language === langToFilter) return true;
+        }
+        return false;
+      });
+
+      return user;
+    }));
+    return usersAndLangs;
   }
 }
 module.exports = GitHub;
