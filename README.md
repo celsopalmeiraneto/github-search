@@ -43,5 +43,5 @@ Where `http://127.0.0.1:3001` is the host and port, and `/search/users/celsopalm
 
 ## TO-DO
 - [ ] Implement integration tests.
-- [x] Replace the Promise.All for serial operations. GitHub [does not recommend](https://developer.github.com/v3/guides/best-practices-for-integrators/#dealing-with-abuse-rate-limits) parallel calls to its API.
+- [x] Replace the Promise.All with serial operations. GitHub [does not recommend](https://developer.github.com/v3/guides/best-practices-for-integrators/#dealing-with-abuse-rate-limits) parallel calls to its API.
 - [ ] Implement caching of the requests.
