@@ -1,4 +1,6 @@
 const axios = require('axios');
+const log4js = require('log4js');
+const logger = log4js.getLogger('GitHub Remote Facade');
 /**
   Class GitHub is a Remote Facade (https://martinfowler.com/eaaCatalog/remoteFacade.html)
   which knows how to consume the GitHub API and translate the requests to
@@ -15,6 +17,9 @@ class GitHub {
       },
     });
 
+    this.axiosGH.interceptors.response.use(null, this._errorTimeoutGitHub);
+    this.axiosGH.interceptors.response.use(null, this._errorQuotaExceeded);
+
     if (process.env.GH_CLIENT_ID && process.env.GH_CLIENT_SECRET) {
       if (!this.axiosGH.defaults.hasOwnProperty('params')) {
         this.axiosGH.defaults.params = {};
@@ -22,6 +27,54 @@ class GitHub {
       this.axiosGH.defaults.params['client_id'] = process.env.GH_CLIENT_ID;
       this.axiosGH.defaults.params['client_secret'] =
         process.env.GH_CLIENT_SECRET;
+    }
+
+    if (process.env.GH_TIMEOUT) {
+      this.axiosGH.defaults.timeout = process.env.GH_TIMEOUT;
+    }
+  }
+
+  /**
+  Interceptor that will return a friendly error message in case the API
+  quota is exceeded.
+  @private
+  @param {object} error - The response sent from the server.
+  @return {object} - Friendly error message.
+  */
+  _errorQuotaExceeded(error) {
+    if (!(error && error.response && error.response.status === 403)) {
+      return Promise.reject(error);
+    }
+
+    const response = error.response;
+    if (response.headers['x-ratelimit-remaining'] !== '0') {
+      return Promise.reject(error);
+    }
+
+    const timestamp = Number.parseInt(response.headers['x-ratelimit-reset'])
+      * 1000;
+    const resetDate = new Date(timestamp);
+    const message = 'The GitHub API quota has got to the limit. ' +
+    `Try again on ${resetDate.toString()}`;
+    const err = new Error(message);
+    err.code = GitHub.ERR_QUOTA;
+    return Promise.reject(err);
+  }
+
+  /**
+  Interceptor that will return a friendly error message in case of timeout.
+  @private
+  @param {object} error - The response sent from the server.
+  @return {object} - Friendly error message.
+  */
+  _errorTimeoutGitHub(error) {
+    if (error.code === 'ECONNABORTED') {
+      const message = 'GitHub has taken a little more than usual to respond.';
+      const err = new Error(message);
+      err.code = GitHub.ERR_TIMEOUT;
+      return Promise.reject(err);
+    } else {
+      return Promise.reject(error);
     }
   }
 
@@ -134,30 +187,27 @@ class GitHub {
       throw new Error('Username cannot be an empty string');
     }
 
+    let link = {
+      next: `/search/users?per_page=100&q=${username} in:login`,
+    };
+
     let userList = [];
 
-    let response = await this.axiosGH.get('/search/users', {
-      params: {
-        per_page: 100,
-        q: `${username} in:login`,
-      },
-    });
+    while (typeof link === 'object' && link !== null
+      && link.hasOwnProperty('next')) {
+      const response = await this.axiosGH.get(link.next);
 
-    if (response.data.total_count === 0) {
-      return [];
-    }
-
-    userList = [...userList, ...this._parseUsersFromSearch(
-        response.data.items)];
-
-    while (response.headers.link && typeof response.headers.link === 'string') {
-      const link = this._parseHeaderLink(response.headers.link);
-      if (link.next) {
-        response = await this.axiosGH.get(link.next);
-        userList = [...userList, ...this._parseUsersFromSearch(
-            response.data.items
-        )];
+      if (response.headers.hasOwnProperty('link')) {
+        link = this._parseHeaderLink(response.headers.link);
+      } else {
+        link = null;
       }
+
+      if (!Array.isArray(response.data.items)) continue;
+
+      userList = [...userList, ...this._parseUsersFromSearch(
+          response.data.items
+      )];
     }
 
     return userList;
@@ -170,44 +220,61 @@ class GitHub {
   regarding the languages searched.
   */
   async searchUsersByUsernameAndLanguages(username, languages) {
+    logger.trace('getting the users with a username like the one given');
     const userList = await this.searchUsersByUsername(username);
+
+    if (!Array.isArray(userList) || userList.length === 0) {
+      return [];
+    }
+
+    logger.trace('getting the profiles of the found users');
     const userProfiles = await Promise.all(userList.map(async (username) => {
       return await this.getUserByUsername(username);
     }));
 
+    logger.trace('getting the repos of the users');
     const usersAndRepos = await Promise.all(userProfiles.map(async (user) => {
       const reposForUser = await this.getReposOfUser(user.username);
       user.repos = reposForUser;
-      return user;
-    }));
 
-    const usersAndLangs = await Promise.all(usersAndRepos.map(async (user) => {
-      const reposLangs = await Promise.all(user.repos.map(async (repo) => {
-        return await this.getLanguagesOfRepo(user.username, repo);
-      }));
-      delete user.repos;
-      user.languages = reposLangs.reduce((acc, languageObj) => {
-        const keys = Object.keys(languageObj);
-        keys.forEach((key) => {
-          if (!acc.hasOwnProperty(key)) {
-            acc[key] = languageObj[key];
-          }
-        });
+      user.languages = languages.reduce((acc, language) => {
+        if (!acc.hasOwnProperty(language)) {
+          acc[language] = null;
+        }
         return acc;
       }, {});
-
-      user.languages = Object.keys(user.languages).filter((langToFilter) => {
-        langToFilter = langToFilter.toLowerCase().trim();
-        for (let language of languages) {
-          language = language.toLowerCase().trim();
-          if (language === langToFilter) return true;
-        }
-        return false;
-      });
-
       return user;
     }));
+
+    logger.trace('getting the languages used in each repo');
+    const usersAndLangs = await Promise.all(usersAndRepos.map(async (user) => {
+      const reposLangs = (await Promise.all(user.repos.map(async (repo) => {
+        return await this.getLanguagesOfRepo(user.username, repo);
+      })))
+          // flattening the results
+          .reduce((acc, langsOfRepo) => {
+            acc = acc.concat(Object.keys(langsOfRepo));
+            return acc;
+          }, []);
+
+      delete user.repos;
+
+      user.languages = Object.keys(user.languages)
+          .reduce((acc, inputLang) => {
+            const found = reposLangs.some((repoLanguage) => {
+              return repoLanguage.toLowerCase() === inputLang.toLowerCase();
+            });
+            acc[inputLang] = found ? 'Language found' : 'Language not found';
+            return acc;
+          }, {});
+      return user;
+    }));
+
     return usersAndLangs;
   }
 }
+
+GitHub.ERR_TIMEOUT = '-1000';
+GitHub.ERR_QUOTA = '-2000';
+
 module.exports = GitHub;
