@@ -30,14 +30,14 @@ app.get('/search/users/:username/languages/:languages', async (req, res) => {
 
     if (users.length === 0) {
       res.status(404);
-      res.send();
+      return res.send();
     }
 
     res.json(users);
   } catch (e) {
     if (e.code === GitHub.ERR_TIMEOUT) {
       res.status(408);
-      res.send(e.message);
+      return res.send(e.message);
     } else {
       return returnError(e, res);
     }
@@ -47,10 +47,11 @@ app.get('/search/users/:username/languages/:languages', async (req, res) => {
 /**
   @param {object} e -  Error to be printed.
   @param {object} res - Express Response object.
+  @return {object} - http response.
 */
 function returnError(e, res) {
   logger.error(e);
-  res.status(500).send({
+  return res.status(500).send({
     message: e.toString(),
     stack: e.stack,
   });

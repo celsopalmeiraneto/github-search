@@ -228,12 +228,15 @@ class GitHub {
     }
 
     logger.trace('getting the profiles of the found users');
-    const userProfiles = await Promise.all(userList.map(async (username) => {
-      return await this.getUserByUsername(username);
-    }));
+    const userProfiles = [];
+    for (const username of userList) {
+      const user = await this.getUserByUsername(username);
+      userProfiles.push(user);
+    }
 
     logger.trace('getting the repos of the users');
-    const usersAndRepos = await Promise.all(userProfiles.map(async (user) => {
+    const usersAndRepos = [];
+    for (const user of userProfiles) {
       const reposForUser = await this.getReposOfUser(user.username);
       user.repos = reposForUser;
 
@@ -243,19 +246,21 @@ class GitHub {
         }
         return acc;
       }, {});
-      return user;
-    }));
+      usersAndRepos.push(user);
+    }
 
     logger.trace('getting the languages used in each repo');
-    const usersAndLangs = await Promise.all(usersAndRepos.map(async (user) => {
-      const reposLangs = (await Promise.all(user.repos.map(async (repo) => {
-        return await this.getLanguagesOfRepo(user.username, repo);
-      })))
-          // flattening the results
-          .reduce((acc, langsOfRepo) => {
-            acc = acc.concat(Object.keys(langsOfRepo));
-            return acc;
-          }, []);
+    const usersAndLangs = [];
+    for (const user of usersAndRepos) {
+      let reposLangs = [];
+      for (const repo of user.repos) {
+        const langs = await this.getLanguagesOfRepo(user.username, repo);
+        reposLangs.push(langs);
+      }
+      reposLangs = reposLangs.reduce((acc, langsOfRepo) => {
+        acc = acc.concat(Object.keys(langsOfRepo));
+        return acc;
+      }, []);
 
       delete user.repos;
 
@@ -267,9 +272,8 @@ class GitHub {
             acc[inputLang] = found ? 'Language found' : 'Language not found';
             return acc;
           }, {});
-      return user;
-    }));
-
+      usersAndLangs.push(user);
+    }
     return usersAndLangs;
   }
 }
