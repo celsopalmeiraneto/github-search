@@ -167,3 +167,45 @@ test('parse header link', () => {
   expect(parsed2).not.toHaveProperty('next');
   /* eslint-enable max-len*/
 });
+
+test('searching the languages of an user....', () => {
+  const gh = new GitHub();
+  gh.searchUsersByUsername = jest.fn().mockImplementation(() => {
+    return Promise.resolve(['celsopalmeiraneto']);
+  });
+
+  gh.getUserByUsername = jest.fn().mockImplementation(() => {
+    return Promise.resolve(
+        {
+          avatarURL: 'https://avatars1.githubusercontent.com/u/1665576?v=4',
+          followers: 14,
+          name: 'Celso Palmeira Neto',
+          username: 'celsopalmeiraneto',
+        },
+    );
+  });
+
+  gh.getReposOfUser = jest.fn().mockImplementation(() => {
+    return Promise.resolve(['a', 'b', 'c']);
+  });
+
+  gh.getLanguagesOfRepo = jest.fn().mockImplementation(() => {
+    return Promise.resolve({JavaScript: 3483, HTML: 2713, CSS: 76});
+  });
+
+  expect.assertions(1);
+  return expect(
+      gh.searchUsersByUsernameAndLanguages('celsopalmeiraneto',
+          ['PHP', 'CSS'])
+  ).resolves.toEqual(
+      [{avatarURL: 'https://avatars1.githubusercontent.com/u/1665576?v=4',
+        followers: 14,
+        name: 'Celso Palmeira Neto',
+        username: 'celsopalmeiraneto',
+        languages:
+          {
+            PHP: 'Language not found',
+            CSS: 'Language found',
+          },
+      }]);
+});

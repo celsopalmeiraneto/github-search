@@ -220,6 +220,14 @@ class GitHub {
   regarding the languages searched.
   */
   async searchUsersByUsernameAndLanguages(username, languages) {
+    if (!Array.isArray(languages)) {
+      throw new Error('Languages must be an Array.');
+    }
+
+    if (typeof username !== 'string') {
+      throw new Error('Username must be a string.');
+    }
+
     logger.trace('getting the users with a username like the one given');
     const userList = await this.searchUsersByUsername(username);
 
