@@ -11,14 +11,23 @@ app.get('/', (req, res) => {
 });
 
 app.get('/search/users/:username/languages/:languages', async (req, res) => {
-  logger.trace('request from ', req.ip, 'params: ', req.params);
+  const timeout = process.env.hasOwnProperty('REQUEST_TIMEOUT')
+    ? Number.parseInt(process.env.REQUEST_TIMEOUT) : 120000;
+
+  let aborted = false;
+  const ghFacade = new GitHub();
+
+  res.setTimeout(timeout, () => {
+    aborted = true;
+    ghFacade.abort();
+    return res.status(408).send('Operation has timed out.');
+  });
+
   try {
     const languages = req.params.languages
         .split(',')
         .map((language) => language.trim());
     logger.trace('languages: ', languages);
-
-    const ghFacade = new GitHub();
 
     const users = await ghFacade.searchUsersByUsernameAndLanguages(
         req.params.username, languages
@@ -35,9 +44,12 @@ app.get('/search/users/:username/languages/:languages', async (req, res) => {
 
     res.json(users);
   } catch (e) {
+    if (aborted) {
+      logger.warn('The request has been aborted.');
+      return;
+    }
     if (e.code === GitHub.ERR_TIMEOUT) {
-      res.status(408);
-      return res.send(e.message);
+      return res.status(408).send(e.message);
     } else {
       return returnError(e, res);
     }
