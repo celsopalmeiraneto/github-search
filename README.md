@@ -18,8 +18,8 @@ As this service does scan all repos, for all users found, it will probably run o
 3. Open your terminal and navigate to the directory where you downloaded this repo.
 4. If you have a CLIENT_ID and CLIENT_SECRET of a GitHub app or want to set a custom timeout, create a copy of the file ` .env.example ` as ` .env ` and fill the environment variables.
 
-  On Windows, run: `copy .env.example .env`;
-  On MacOS or Linux, run: `cp .env.example .env`
+    On Windows, run: `copy .env.example .env`;
+    On MacOS or Linux, run: `cp .env.example .env`
 
 5. Run the following command: ` docker build -t gh-search . ` **Don't forget to copy the "." at the end.**
 6. Run the command ` docker run -p <port>:3000 -d gh-search `, replace ` <port> ` with an available port in your computer.
