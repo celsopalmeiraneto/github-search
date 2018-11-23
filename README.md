@@ -9,7 +9,7 @@ After giving to the endpoint a username and one or more languages to search for,
 Example... If you search for the user 'celsopalmeiraneto' and languages 'javascript and erlang', as of Nov 22nd 2018, you will have the info about Celso and will notice that he has JavaScript on his repos, but not erlang.
 
 ### Caveats - You SHOULD read it.
-As this service does scan all repos, for all users found, it will probably run over the GitHub's API quota very fast!!! If you search, for example, for the user 'google', it will consume all hourly limit on the blink of an eye, as it will search for all users with 'google' in the name.
+As this service does scan all repos, for all users found, it will probably run over the GitHub's API quota very fast!!! If you search, for example, for the user 'google', it will consume all hourly limit on the blink of an eye, as it will search for all users with 'google' in the name, trust me, there a bunch of them.
 
 ## How to use it?
 

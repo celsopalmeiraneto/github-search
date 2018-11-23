@@ -113,6 +113,14 @@ class GitHub {
   }
 
   /**
+    This method will set null to Axios, causing the instance to throw an
+    error.
+  */
+  abort() {
+    this.axiosGH = null;
+  }
+
+  /**
   @param {string} username - Username to use in the composite key
   @param {string} repo - Repo to use in the composite key
   @return {object} - Languages used in this repo.
@@ -125,6 +133,7 @@ class GitHub {
       throw new Error('Repo must be a string');
     }
     const url = `/repos/${username}/${repo}/languages`;
+    logger.trace(`Getting languages for repo ${username}/${repo}`);
     const response = await this.axiosGH.get(url);
     return response.data;
   }
@@ -140,6 +149,7 @@ class GitHub {
     let repos = [];
     while (typeof link === 'object' && link !== null
       && link.hasOwnProperty('next')) {
+      logger.trace('Getting repos of user ', username);
       const response = await this.axiosGH.get(link.next);
 
       if (response.headers.hasOwnProperty('link')) {
@@ -164,6 +174,7 @@ class GitHub {
     if (typeof username !== 'string') {
       throw new Error('Username must be a string');
     }
+    logger.trace('Getting user data ', username);
     const response = await this.axiosGH.get(`/users/${username}`);
     if (response.status === 404) return null;
 
@@ -195,6 +206,7 @@ class GitHub {
 
     while (typeof link === 'object' && link !== null
       && link.hasOwnProperty('next')) {
+      logger.trace('Searching for users like ', username);
       const response = await this.axiosGH.get(link.next);
 
       if (response.headers.hasOwnProperty('link')) {
